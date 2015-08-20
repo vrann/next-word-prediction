@@ -1,8 +1,7 @@
 source('ngram.R')
 library(data.table)
 
-
-loadData = function() {
+getSample = function(factor = 0.1) {
     library(data.table)
     twitter = readLines('en_US/en_US.twitter.txt')
     length(twitter)
@@ -10,9 +9,12 @@ loadData = function() {
     length(blog)
     news = readLines('en_US/en_US.news.txt')
     length(news)
-    factor = 0.1
     document = append(append(sample(twitter, factor*length(twitter)), sample(news, factor*length(news))), sample(blog, factor*length(blog)))
-    data.table(getSentences(document))
+}
+
+loadData = function()
+{
+    data.table(tokenize(getSample()))
 }
 
 createDatabase = function(tokens, tokensDbName, ngramsDbName)
@@ -22,6 +24,12 @@ createDatabase = function(tokens, tokensDbName, ngramsDbName)
     
     dbWriteTable(tokensDB, 'tokens', tokens, overwrite=T)
     dbGetQuery(tokensDB, "ALTER TABLE tokens ADD COLUMN count INTEGER DEFAULT 1")
+    
+    #tokens$count = rep(1, nrow(tokens))
+    #unigrams = tokens[, list(count=sum(count)), by=c('V1')]
+    #unigrams[, list(id = seq_along(V1))]
+    #tokens = merge(tokens, unigrams, by=c('V1'))
+    #print(head(tokens))
     
     dbGetQuery(tokensDB, "CREATE TABLE tokens_count (id INTEGER, V1 VARCHAR , count INTEGER)")
     dbGetQuery(tokensDB, "INSERT INTO tokens_count SELECT ROWID, V1, SUM(count) FROM tokens GROUP BY V1")
@@ -34,39 +42,40 @@ createDatabase = function(tokens, tokensDbName, ngramsDbName)
         "SELECT tokens.V1, tokens_count.count, tokens_count.id FROM tokens LEFT JOIN tokens_count ON tokens.V1 = tokens_count.V1")
     dbWriteTable(tokensDB, 'tokens_indexed', tokensIndexed, overwrite=T)
 
-    indexSequence = dbGetQuery(tokensDB, "SELECT id FROM tokens_indexed")$id
-
-    createNgrams(tokensDB, indexSequence)
+    indexSequence = dbGetQuery(tokensDB, "SELECT id, V1  FROM tokens_indexed")
+    stopword = indexSequence[indexSequence$V1 == '</s>', ]$id[1]
+    createNgrams(ngramsDB, indexSequence$id, stopword)
     
-    bigrams = dbGetQuery(tokensDB, "SELECT * FROM bigrams")
-    dbGetQuery(tokensDB, "ALTER TABLE bigrams ADD COLUMN count INTEGER DEFAULT 1")
-    dbGetQuery(tokensDB, "CREATE TABLE bigrams_count (id INTEGER, x INTEGER, y INTEGER, count INTEGER)")
-    dbGetQuery(tokensDB, "INSERT INTO bigrams_count SELECT ROWID, x, y, SUM(count) FROM bigrams GROUP BY x, y")
-    data  = dbGetQuery(tokensDB, "SELECT * FROM bigrams_count")
-    dbWriteTable(ngramsDB, 'bigrams', data, overwrite=T)
-    dbGetQuery(ngramsDB, "CREATE INDEX bigrams_index_x ON bigrams (x)")
-    dbGetQuery(ngramsDB, "CREATE INDEX bigrams_index_y ON bigrams (y)")
+    #bigrams = dbGetQuery(tokensDB, "SELECT * FROM bigrams")
     
-    trigrams = dbGetQuery(tokensDB, "SELECT * FROM trigrams")
-    dbGetQuery(tokensDB, "ALTER TABLE trigrams ADD COLUMN count INTEGER DEFAULT 1")
-    dbGetQuery(tokensDB, "CREATE TABLE trigrams_count (id INTEGER, x INTEGER, y INTEGER, a INTEGER, count INTEGER)")
-    dbGetQuery(tokensDB, "INSERT INTO trigrams_count SELECT ROWID, x, y, a, SUM(count) FROM trigrams GROUP BY x, y, a")
-    data  = dbGetQuery(tokensDB, "SELECT * FROM trigrams_count")
-    dbWriteTable(ngramsDB, 'trigrams', data, overwrite=T)
-    dbGetQuery(ngramsDB, "CREATE INDEX trigrams_index_x ON trigrams (x)")
-    dbGetQuery(ngramsDB, "CREATE INDEX trigrams_index_y ON trigrams (y)")
-    dbGetQuery(ngramsDB, "CREATE INDEX trigrams_index_a ON trigrams (a)")
+    #dbGetQuery(tokensDB, "ALTER TABLE bigrams ADD COLUMN count INTEGER DEFAULT 1")
+    #dbGetQuery(tokensDB, "CREATE TABLE bigrams_count (id INTEGER, x INTEGER, y INTEGER, count INTEGER)")
+    #dbGetQuery(tokensDB, "INSERT INTO bigrams_count SELECT ROWID, x, y, SUM(count) FROM bigrams GROUP BY x, y")
+    #data  = dbGetQuery(tokensDB, "SELECT * FROM bigrams_count")
+    #dbWriteTable(ngramsDB, 'bigrams', data, overwrite=T)
+    #dbGetQuery(ngramsDB, "CREATE INDEX bigrams_index_x ON bigrams (x)")
+    #dbGetQuery(ngramsDB, "CREATE INDEX bigrams_index_y ON bigrams (y)")
     
-    bigrams = dbGetQuery(tokensDB, "SELECT * FROM quadgrams")
-    dbGetQuery(tokensDB, "ALTER TABLE quadgrams ADD COLUMN count INTEGER DEFAULT 1")
-    dbGetQuery(tokensDB, "CREATE TABLE quadgrams_count (id INTEGER, x INTEGER, y INTEGER, a INTEGER, b INTEGER, count INTEGER)")
-    dbGetQuery(tokensDB, "INSERT INTO quadgrams_count SELECT ROWID, x, y, a, b, SUM(count) FROM quadgrams GROUP BY x, y, a, b")
-    data  = dbGetQuery(tokensDB, "SELECT * FROM quadgrams_count")
-    dbWriteTable(ngramsDB, 'quadgrams', data, overwrite=T)
-    dbGetQuery(ngramsDB, "CREATE INDEX quadgrams_index_x ON quadgrams (x)")
-    dbGetQuery(ngramsDB, "CREATE INDEX quadgrams_index_y ON quadgrams (y)")
-    dbGetQuery(ngramsDB, "CREATE INDEX quadgrams_index_a ON quadgrams (a)")
-    dbGetQuery(ngramsDB, "CREATE INDEX quadgrams_index_b ON quadgrams (b)")
+    #trigrams = dbGetQuery(tokensDB, "SELECT * FROM trigrams")
+    #dbGetQuery(tokensDB, "ALTER TABLE trigrams ADD COLUMN count INTEGER DEFAULT 1")
+    #dbGetQuery(tokensDB, "CREATE TABLE trigrams_count (id INTEGER, x INTEGER, y INTEGER, a INTEGER, count INTEGER)")
+    #dbGetQuery(tokensDB, "INSERT INTO trigrams_count SELECT ROWID, x, y, a, SUM(count) FROM trigrams GROUP BY x, y, a")
+    #data  = dbGetQuery(tokensDB, "SELECT * FROM trigrams_count")
+    #dbWriteTable(ngramsDB, 'trigrams', data, overwrite=T)
+    #dbGetQuery(ngramsDB, "CREATE INDEX trigrams_index_x ON trigrams (x)")
+    #dbGetQuery(ngramsDB, "CREATE INDEX trigrams_index_y ON trigrams (y)")
+    #dbGetQuery(ngramsDB, "CREATE INDEX trigrams_index_a ON trigrams (a)")
+    
+    #bigrams = dbGetQuery(tokensDB, "SELECT * FROM quadgrams")
+    #dbGetQuery(tokensDB, "ALTER TABLE quadgrams ADD COLUMN count INTEGER DEFAULT 1")
+    #dbGetQuery(tokensDB, "CREATE TABLE quadgrams_count (id INTEGER, x INTEGER, y INTEGER, a INTEGER, b INTEGER, count INTEGER)")
+    #dbGetQuery(tokensDB, "INSERT INTO quadgrams_count SELECT ROWID, x, y, a, b, SUM(count) FROM quadgrams GROUP BY x, y, a, b")
+    #data  = dbGetQuery(tokensDB, "SELECT * FROM quadgrams_count")
+    #dbWriteTable(ngramsDB, 'quadgrams', data, overwrite=T)
+    #dbGetQuery(ngramsDB, "CREATE INDEX quadgrams_index_x ON quadgrams (x)")
+    #dbGetQuery(ngramsDB, "CREATE INDEX quadgrams_index_y ON quadgrams (y)")
+    #dbGetQuery(ngramsDB, "CREATE INDEX quadgrams_index_a ON quadgrams (a)")
+    #dbGetQuery(ngramsDB, "CREATE INDEX quadgrams_index_b ON quadgrams (b)")
     
     dbDisconnect(tokensDB)
     dbDisconnect(ngramsDB)
@@ -136,14 +145,23 @@ copyTablesNotIndexed = function(fromDbName, toDbName)
 }
 
 
-createNgrams = function(dbConnection, indexSequence) {
+createNgrams = function(dbConnection, indexSequence, stopword) {
+    print(stopword)
     bigrams = matrix(nrow = (length(indexSequence)-1), ncol=2)
     trigrams = matrix(nrow = (length(indexSequence)-2), ncol=3)
     quadgrams = matrix(nrow = (length(indexSequence)-3), ncol=4)
     for (i in 1:(length(indexSequence)-3)) {
+        if (indexSequence[i] == stopword)
+            next
         quadgrams[i,1] = trigrams[i,1] = bigrams[i,1] = indexSequence[i]
+        if (indexSequence[i+1] == stopword)
+            next
         quadgrams[i,2] = trigrams[i,2] = bigrams[i,2] = indexSequence[i+1]
+        if (indexSequence[i+2] == stopword)
+            next
         quadgrams[i,3] = trigrams[i,3] = indexSequence[i+2]
+        if (indexSequence[i+3] == stopword)
+            next
         quadgrams[i,4] = indexSequence[i+3]
         if (i %% 10000 == 0) {
             print(i)
@@ -162,41 +180,68 @@ createNgrams = function(dbConnection, indexSequence) {
     bigrams_table = data.table(bigrams)
     setnames(bigrams_table, c('x', 'y'))
     
-    remove = dbGetQuery(dbConnection, "SELECT V1, id FROM tokens_count where V1 in (\"<s>\", \"</s>\")")
-    startId = remove[remove$V1=='<s>',]$id
-    endId = remove[remove$V1=='</s>',]$id
+    #remove = dbGetQuery(dbConnection, "SELECT V1, id FROM tokens_count where V1 in (\"<s>\", \"</s>\")")
+    #startId = remove[remove$V1=='<s>',]$id
+    #endId = remove[remove$V1=='</s>',]$id
     
-    dbGetQuery(dbConnection, "CREATE TABLE bigrams (x INTEGER, y INTEGER)")
+    bigrams_table = bigrams_table[!(is.na(bigrams_table$x))]
+    bigrams_table = bigrams_table[!(is.na(bigrams_table$y))]                              
+                                  
+    print(head(bigrams_table))
+    print(bigrams_table[(is.na(bigrams_table$x)) | (is.na(bigrams_table$y))])
+    bigrams_table$count = rep(1, nrow(bigrams_table))
+    bigrams_table = bigrams_table[, list(count=sum(count)), by=c('x', 'y')]
+    #bigrams_table = bigrams_table[!(bigrams_table$x == endId && bigrams_table$y == startId)]
+    
+    
+    #dbGetQuery(dbConnection, "CREATE TABLE bigrams (x INTEGER, y INTEGER)")
     dbWriteTable(dbConnection, 'bigrams', bigrams_table, overwrite=T)
-    dbGetQuery(dbConnection, sprintf("DELETE FROM bigrams WHERE x=%s AND y=%s", endId, startId))
+    #dbGetQuery(dbConnection, sprintf("DELETE FROM bigrams WHERE x=%s AND y=%s", endId, startId))
     
     trigrams_table = data.table(trigrams)
     setnames(trigrams_table, c('x', 'y', 'a'))
+    trigrams_table = trigrams_table[!(is.na(trigrams_table$x))]
+    trigrams_table = trigrams_table[!(is.na(trigrams_table$y))]
+    trigrams_table = trigrams_table[!(is.na(trigrams_table$a))]
     
-    dbGetQuery(dbConnection, "CREATE TABLE trigrams (x INTEGER, y INTEGER, a INTEGER)")
+    trigrams_table$count = rep(1, nrow(trigrams_table))
+    trigrams_table = trigrams_table[, list(count=sum(count)), by=c('x', 'y', 'a')]
+    trigrams_table = trigrams_table[trigrams_table$count > 1]
+    #trigrams_table = trigrams_table[!(trigrams_table$x == endId && trigrams_table$y == startId)]
+    
+    
+    #dbGetQuery(dbConnection, "CREATE TABLE trigrams (x INTEGER, y INTEGER, a INTEGER)")
     dbWriteTable(dbConnection, 'trigrams', trigrams_table, overwrite=T)
-    dbGetQuery(dbConnection, sprintf("DELETE FROM trigrams WHERE (x=%s AND y=%s) OR (y=%s AND a=%s)", 
-                                 endId, 
-                                 startId,
-                                 endId, 
-                                 startId
-                                 )
-               )
+    #dbGetQuery(dbConnection, sprintf("DELETE FROM trigrams WHERE (x=%s AND y=%s) OR (y=%s AND a=%s)", 
+    #                             endId, 
+    #                             startId,
+    #                             endId, 
+    #                             startId
+    #                             )
+    #           )
     
     
     
     quadgrams_table = data.table(quadgrams)
     setnames(quadgrams_table, c('x', 'y', 'a', 'b'))
-    
-    dbGetQuery(dbConnection, "CREATE TABLE quadgrams (x INTEGER, y INTEGER, a INTEGER, b INTEGER)")
+    quadgrams_table = quadgrams_table[!(is.na(quadgrams_table$x))]
+    quadgrams_table = quadgrams_table[!(is.na(quadgrams_table$y))]
+    quadgrams_table = quadgrams_table[!(is.na(quadgrams_table$a))]
+    quadgrams_table = quadgrams_table[!(is.na(quadgrams_table$b))]
+
+    quadgrams_table$count = rep(1, nrow(quadgrams_table))
+    quadgrams_table = quadgrams_table[, list(count=sum(count)), by=c('x', 'y', 'a', 'b')]
+    quadgrams_table = quadgrams_table[quadgrams_table$count > 1]
+
+    #dbGetQuery(dbConnection, "CREATE TABLE quadgrams (x INTEGER, y INTEGER, a INTEGER, b INTEGER)")
     dbWriteTable(dbConnection, 'quadgrams', quadgrams_table, overwrite=T)
-    dbGetQuery(dbConnection, sprintf("DELETE FROM quadgrams WHERE (x=%s AND y=%s) OR (y=%s AND a=%s) OR (a=%s AND b=%s)", 
-                                 endId, 
-                                 startId,
-                                 endId, 
-                                 startId,
-                                 endId, 
-                                 startId
-    )
-    )
+    #dbGetQuery(dbConnection, sprintf("DELETE FROM quadgrams WHERE (x=%s AND y=%s) OR (y=%s AND a=%s) OR (a=%s AND b=%s)", 
+    #                             endId, 
+    #                             startId,
+    #                             endId, 
+    #                             startId,
+    #                             endId, 
+    #                             startId
+    #)
+    #)
 }
