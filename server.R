@@ -1,23 +1,51 @@
 library(shiny)
-source('ngram.R')
+#library(twitteR)
+#library(textcat)
 library(RSQLite)
 library(data.table)
 
-db <- dbConnect(SQLite(), 'newrelease/ngrm')
-ngrams1 = data.table(dbGetQuery(db, "SELECT * FROM unigrams"))
-ngrams2 = data.table(dbGetQuery(db, "SELECT * FROM bigrams"))
-ngrams3 = data.table(dbGetQuery(db, "SELECT * FROM trigrams"))
-ngrams4 = data.table(dbGetQuery(db, "SELECT * FROM quadgrams"))
+library(wordcloud)
+#install_github("ShinySky", username="vrann")
 
+library(shinysky)
+source('ngram.R')
 
 calculatePrediction= function(sentence) {
-    #bestNextWordMemory(tokenize(sentence, F), ngrams1, ngrams2)
-    getNextWords(sentence, 5)
+    getNextWords(sentence, 5)$V1
 }
 
 shinyServer(
-    function(input, output) {
-        output$sentence <- renderPrint({input$sentence})
-        output$prediction = reactive({calculatePrediction(input$sentence)})
+    function(input, output, session) {
+        output$simpleSentence <- renderPrint({input$simpleSentence})
+        output$prediction = reactive({termsSimple()[1]$V1})
+        #output$plot1 <- renderPlot({
+        #    nextWords = termsSimple()
+        #    wordcloud(nextWords$V1, nextWords$size,
+        #              scale=c(4, 0.5),
+        #              colors=brewer.pal(8, "Dark2"))
+        #})
+        
+        output$plot2 <- renderPlot({
+            nextWords = terms()
+            wordcloud(nextWords$V1, nextWords$size,
+                      scale=c(4, 0.5),
+                      colors=brewer.pal(8, "Dark2"))
+        })
+        
+        
+        termsSimple <- reactive({
+            nextWords =  getNextWords(paste(input$simpleSentence, collapse = " "), 40)
+        })
+        terms <- reactive({
+            nextWords =  getNextWords(paste(input$sentence, collapse = " "), 40)
+        })
+        
+        
+        observe({
+            nextWords = terms()[1:7]$V1
+            updateSelect2Input(session, "sentence", choices = nextWords, selected = input$sentence, label = "hello")
+        })
+        
+        
     }
 )

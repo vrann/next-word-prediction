@@ -1,4 +1,5 @@
 source('ngram.R')
+library(RSQLite)
 library(data.table)
 
 getSample = function(factor = 0.1) {
@@ -150,53 +151,42 @@ createNgrams = function(dbConnection, indexSequence, stopword) {
     bigrams = matrix(nrow = (length(indexSequence)-1), ncol=2)
     trigrams = matrix(nrow = (length(indexSequence)-2), ncol=3)
     quadgrams = matrix(nrow = (length(indexSequence)-3), ncol=4)
-    for (i in 1:(length(indexSequence)-3)) {
+    quinqgrams = matrix(nrow = (length(indexSequence)-4), ncol=5)
+    for (i in 1:(length(indexSequence)-4)) {
         if (indexSequence[i] == stopword)
             next
-        quadgrams[i,1] = trigrams[i,1] = bigrams[i,1] = indexSequence[i]
+        quinqgrams[i, 1] = quadgrams[i,1] = trigrams[i,1] = bigrams[i,1] = indexSequence[i]
         if (indexSequence[i+1] == stopword)
             next
-        quadgrams[i,2] = trigrams[i,2] = bigrams[i,2] = indexSequence[i+1]
+        quinqgrams[i, 2] = quadgrams[i,2] = trigrams[i,2] = bigrams[i,2] = indexSequence[i+1]
         if (indexSequence[i+2] == stopword)
             next
-        quadgrams[i,3] = trigrams[i,3] = indexSequence[i+2]
+        quinqgrams[i, 3] = quadgrams[i,3] = trigrams[i,3] = indexSequence[i+2]
         if (indexSequence[i+3] == stopword)
             next
-        quadgrams[i,4] = indexSequence[i+3]
+        quinqgrams[i, 4] = quadgrams[i,4] = indexSequence[i+3]
+        if (indexSequence[i+4] == stopword)
+            next
+        quinqgrams[i,5] = indexSequence[i+4]
         if (i %% 10000 == 0) {
             print(i)
         }
     }
-    bigrams[length(indexSequence)-2, 1] = indexSequence[length(indexSequence)-2]
-    bigrams[length(indexSequence)-2 ,2] = indexSequence[length(indexSequence)-1]
-    
-    bigrams[length(indexSequence)-1, 1] = indexSequence[length(indexSequence)-1]
-    bigrams[length(indexSequence)-1, 2] = indexSequence[length(indexSequence)]
-    
-    trigrams[length(indexSequence)-2,1] = indexSequence[length(indexSequence)-2]
-    trigrams[length(indexSequence)-2,2] = indexSequence[length(indexSequence)-1]
-    trigrams[length(indexSequence)-2,3] = indexSequence[length(indexSequence)]
     
     bigrams_table = data.table(bigrams)
     setnames(bigrams_table, c('x', 'y'))
-    
-    #remove = dbGetQuery(dbConnection, "SELECT V1, id FROM tokens_count where V1 in (\"<s>\", \"</s>\")")
-    #startId = remove[remove$V1=='<s>',]$id
-    #endId = remove[remove$V1=='</s>',]$id
-    
     bigrams_table = bigrams_table[!(is.na(bigrams_table$x))]
     bigrams_table = bigrams_table[!(is.na(bigrams_table$y))]                              
                                   
     print(head(bigrams_table))
     print(bigrams_table[(is.na(bigrams_table$x)) | (is.na(bigrams_table$y))])
+    
     bigrams_table$count = rep(1, nrow(bigrams_table))
     bigrams_table = bigrams_table[, list(count=sum(count)), by=c('x', 'y')]
-    #bigrams_table = bigrams_table[!(bigrams_table$x == endId && bigrams_table$y == startId)]
-    
-    
-    #dbGetQuery(dbConnection, "CREATE TABLE bigrams (x INTEGER, y INTEGER)")
+    bigrams_table = bigrams_table[bigrams_table$count > 1]
+
     dbWriteTable(dbConnection, 'bigrams', bigrams_table, overwrite=T)
-    #dbGetQuery(dbConnection, sprintf("DELETE FROM bigrams WHERE x=%s AND y=%s", endId, startId))
+
     
     trigrams_table = data.table(trigrams)
     setnames(trigrams_table, c('x', 'y', 'a'))
@@ -207,20 +197,8 @@ createNgrams = function(dbConnection, indexSequence, stopword) {
     trigrams_table$count = rep(1, nrow(trigrams_table))
     trigrams_table = trigrams_table[, list(count=sum(count)), by=c('x', 'y', 'a')]
     trigrams_table = trigrams_table[trigrams_table$count > 1]
-    #trigrams_table = trigrams_table[!(trigrams_table$x == endId && trigrams_table$y == startId)]
-    
-    
-    #dbGetQuery(dbConnection, "CREATE TABLE trigrams (x INTEGER, y INTEGER, a INTEGER)")
+
     dbWriteTable(dbConnection, 'trigrams', trigrams_table, overwrite=T)
-    #dbGetQuery(dbConnection, sprintf("DELETE FROM trigrams WHERE (x=%s AND y=%s) OR (y=%s AND a=%s)", 
-    #                             endId, 
-    #                             startId,
-    #                             endId, 
-    #                             startId
-    #                             )
-    #           )
-    
-    
     
     quadgrams_table = data.table(quadgrams)
     setnames(quadgrams_table, c('x', 'y', 'a', 'b'))
@@ -233,15 +211,19 @@ createNgrams = function(dbConnection, indexSequence, stopword) {
     quadgrams_table = quadgrams_table[, list(count=sum(count)), by=c('x', 'y', 'a', 'b')]
     quadgrams_table = quadgrams_table[quadgrams_table$count > 1]
 
-    #dbGetQuery(dbConnection, "CREATE TABLE quadgrams (x INTEGER, y INTEGER, a INTEGER, b INTEGER)")
     dbWriteTable(dbConnection, 'quadgrams', quadgrams_table, overwrite=T)
-    #dbGetQuery(dbConnection, sprintf("DELETE FROM quadgrams WHERE (x=%s AND y=%s) OR (y=%s AND a=%s) OR (a=%s AND b=%s)", 
-    #                             endId, 
-    #                             startId,
-    #                             endId, 
-    #                             startId,
-    #                             endId, 
-    #                             startId
-    #)
-    #)
+    
+    quinqgrams_table = data.table(quinqgrams)
+    setnames(quinqgrams_table, c('x', 'y', 'a', 'b', 'c'))
+    quinqgrams_table = quinqgrams_table[!(is.na(quinqgrams_table$x))]
+    quinqgrams_table = quinqgrams_table[!(is.na(quinqgrams_table$y))]
+    quinqgrams_table = quinqgrams_table[!(is.na(quinqgrams_table$a))]
+    quinqgrams_table = quinqgrams_table[!(is.na(quinqgrams_table$b))]
+    quinqgrams_table = quinqgrams_table[!(is.na(quinqgrams_table$c))]
+    
+    quinqgrams_table$count = rep(1, nrow(quinqgrams_table))
+    quinqgrams_table = quinqgrams_table[, list(count=sum(count)), by=c('x', 'y', 'a', 'b', 'c')]
+    quinqgrams_table = quinqgrams_table[quinqgrams_table$count > 1]
+
+    dbWriteTable(dbConnection, 'quinqgrams', quinqgrams_table, overwrite=T)
 }
