@@ -3,14 +3,14 @@ Prediction of the Next Word.
 author: Eugene Tulika (vrann)
 date: 22 Aug 2015
 
-Data Science Capstone Project
+Demo: https://vrann.shinyapps.io/next-word-prediction/
 
 Overview
 ========================================================
 
 Modern applications are looking for artistic ways to use data science to improve user interactions.
 
-This work is an example of application where the most routine part of interaction with computer -- typing of the words -- was improved with scientific methods.
+This work is an example of application where the most routine part of interaction with computer - typing of the words - was improved with scientific methods.
 
 The goal of application is to predict the word the user will enter next. It can be used in mobile devices development or in complex environmnets. 
 
